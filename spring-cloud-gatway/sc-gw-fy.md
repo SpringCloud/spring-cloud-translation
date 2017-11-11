@@ -641,7 +641,7 @@ spring:
         uri: http://example.org
         filters:
         - SetStatus=401
-----
+```
 
 In either case, the HTTP status of the response will be set to 401.
 > 如上配置下，无论什么情况，http的响应状态都会被置为401
