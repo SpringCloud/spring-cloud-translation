@@ -626,8 +626,8 @@ The SetStatus GatewayFilter Factory takes a single `status` parameter. It must b
 > 请求响应网关过滤器工厂需要一个`status`参数。该参数值必须是一个有效的Spring `HttpStatus`。该值可以是整型`404`或者是表示枚举类型`NOT_FOUND`的字符串。
 
 application.yml
-[source,yaml]
-----
+
+```java
 spring:
   cloud:
     gateway:
@@ -701,11 +701,12 @@ Configuration for Spring Cloud Gateway is driven by a collection of `RouteDefini
 > Spring Cloud Gateway的配置是被一系列的`RouteDefinitionLocator`类来管理的。
 
 RouteDefinitionLocator.java
-----
+
+```java
 public interface RouteDefinitionLocator {
 	Flux<RouteDefinition> getRouteDefinitions();
 }
-----
+```
 
 By default, a `PropertiesRouteDefinitionLocator` loads properties using Spring Boot's `@ConfigurationProperties` mechanism.
 
@@ -715,9 +716,9 @@ The configuration examples above all use a shortcut notation that uses positiona
 
 > 以上的配置例子全部都是使用一个指定位置参数（译者注：“_genkey_”+i）的快捷方式，而不是指定命名的。下面两个例子是等价的：
 
-.application.yml
-[source,yaml]
-----
+application.yml
+
+```java
 spring:
   cloud:
     gateway:
@@ -733,7 +734,7 @@ spring:
         uri: http://example.org
         filters:
         - SetStatus=401
-----
+```
 
 For some usages of the gateway, properties will be adequate, but some production use cases will benefit from loading configuration from an external source, such as a database. Future milestone versions will have `RouteDefinitionLocator` implementations based off of Spring Data Repositories such as: Redis, MongoDB and Cassandra.
 
@@ -746,7 +747,8 @@ To allow for simple configuration in Java, there is a fluent API defined in the 
 > 为了在Java中更简单的配置，在`Routes`类中定义了流式API。
 
 GatewaySampleApplication.java
-----
+
+```java
 // static imports from GatewayFilters and RoutePredicates
 @Bean
 public RouteLocator customRouteLocator(ThrottleGatewayFilterFactory throttle) {
@@ -769,7 +771,7 @@ public RouteLocator customRouteLocator(ThrottleGatewayFilterFactory throttle) {
                 .uri("http://httpbin.org:80")
             .build();
 }
-----
+```
 
 This style also allows for more custom predicate assertions. The predicates defined by `RouteDefinitionLocator` beans are combined using logical `and`. By using the fluent Java API, you can use the `and()`, `or()` and `negate()` operators on the `Predicate` class.
 
