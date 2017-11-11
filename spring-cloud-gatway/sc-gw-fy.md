@@ -620,3 +620,248 @@ spring:
 这个网关过滤器将用给定的响应头的值替换掉原来请求响应头的值，注意不是添加而是替换。 在上面的配置中，如果下游服务器使用X-Response-Foo：1234进行响应，则将被X-Response-Foo：Bar取代，网关客户端收到的响应头为X-Response-Foo：Bar而不是X-Response-Foo：1234。
 
 
+### SetStatus GatewayFilter Factory (请求响应状态网关过滤器工厂)
+The SetStatus GatewayFilter Factory takes a single `status` parameter. It must be a valid Spring `HttpStatus`. It may be the integer value `404` or the string representation of the enumeration `NOT_FOUND`.
+
+> 请求响应网关过滤器工厂需要一个`status`参数。该参数值必须是一个有效的Spring `HttpStatus`。该值可以是整型`404`或者是表示枚举类型`NOT_FOUND`的字符串。
+
+application.yml
+[source,yaml]
+----
+spring:
+  cloud:
+    gateway:
+      routes:
+      # =====================================
+      - id: setstatusstring_route
+        uri: http://example.org
+        filters:
+        - SetStatus=BAD_REQUEST
+      - id: setstatusint_route
+        uri: http://example.org
+        filters:
+        - SetStatus=401
+----
+
+In either case, the HTTP status of the response will be set to 401.
+> 如上配置下，无论什么情况，http的响应状态都会被置为401
+
+## Global Filters （全局过滤器）
+
+The `GlobalFilter` interface has the same signature as `GatewayFilter`. These are special filters that are conditionally applied to all routes. (This interface and usage are subject to change in future milestones).
+
+> `GlobalFilter`全局过滤器接口有和`GatewayFilter`相同的签名。这些特殊的过滤器有条件性的应用到全部路由中。（这类接口和用法将会在未来里程碑版本中发生变化）
+
+### Combined Global Filter and GatewayFilter Ordering （组合全局过滤器和网关过滤器定序）
+
+TODO: document ordering
+
+> 接下来要做：文档化定序方式
+
+### Forward Routing Filter （转发路由过滤器）
+
+The `ForwardRoutingFilter` looks for a URI in the exchange attribute `ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`. If the url has a `forward` scheme (ie `forward:///localendpoint`), it will use the Spring `DispatcherHandler` to handler the request. The unmodified original url is appended to the list in the `ServerWebExchangeUtils.GATEWAY_ORIGINAL_REQUEST_URL_ATTR` attribute.
+
+> `ForwardRoutingFilter`通过以`ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`为key在交换属性中获得URI（统一资源标识符）。如果这个url(统一资源定位符)是`forward`协议，（比如：`forward:///localendpoint`），那么就会通过Spring`DispatcherHandler` 去处理该请求。这个未修改的原始路径会被添加到以`ServerWebExchangeUtils.GATEWAY_ORIGINAL_REQUEST_URL_ATTR`为key的列表中。
+
+### LoadBalancerClient Filter (客户端负载均衡过滤器)
+
+The `LoadBalancerClientFilter` looks for a URI in the exchange attribute `ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`. If the url has a `lb` scheme (ie `lb://myservice`), it will use the Spring Cloud `LoadBalancerClient` to resolve the name (`myservice` in the previous example) to an actual host and port and replace the URI in the same attribute. The unmodified original url is appended to the list in the `ServerWebExchangeUtils.GATEWAY_ORIGINAL_REQUEST_URL_ATTR` attribute.
+
+> `LoadBalancerClientFilter`通过以`ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`为key在交换属性中获得URI。如果这个url是`lb`协议（比如`lb://myservice`），那么就会通过Spring Cloud `LoadBalancerClient`去处理这个`myservice`（这个名字是与前面的例子中匹配的）找到真实的主机和端口，然后在uri的同类属性中进行替换。这个未修改的原始路径会被添加到以`ServerWebExchangeUtils.GATEWAY_ORIGINAL_REQUEST_URL_ATTR`为key的LinkedHashSet列表中。
+
+### Netty Routing Filter （Netty路由过滤器）
+
+The Netty Routing Filter runs if the url located in the `ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR` exchange attribute has a `http` or `https` scheme. It uses the Netty `HttpClient` to make the downstream proxy request. The response is put in the `ServerWebExchangeUtils.CLIENT_RESPONSE_ATTR` exchange attribute for use in a later filter. (There is an experimental `WebClientHttpRoutingFilter` that performs the same function, but does not require netty)
+
+> 如果在交换属性中以`ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`为key获得的url是以`http`或者是`https`为请求协议，那么Netty路由过滤器就会生效工作。其是使用Netty`HttpClient`去生成一个下游的代理请求。请求的响应根据`ServerWebExchangeUtils.CLIENT_RESPONSE_ATTR`添加进交换属性中以供后面的过滤器使用。（有一个实验性的过滤器`WebClientHttpRoutingFilter`执行相同的函数，但是不需要Netty）
+
+### Netty Write Response Filter （Netty响应过滤器）
+
+The `NettyWriteResponseFilter` runs if there is a Netty `HttpClientResponse` in the `ServerWebExchangeUtils.CLIENT_RESPONSE_ATTR` exchange attribute. It is run after all other filters have completed and writes the proxy response back to the gateway client response. (There is an experimental `WebClientWriteResponseFilter` that performs the same function, but does not require netty)
+
+> 如果在交换属性中以`ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`为key获得的请求响应是一个Netty的响应 `HttpClientResponse`，那么Netty响应过滤器`NettyWriteResponseFilter`就会生效工作。其是在所有的其他过滤器处理完成之后开始工作的，并且写入代理请求返回给网关客户端响应。（有一个实验性的过滤器`WebClientWriteResponseFilter`执行相同的函数，但是不需要Netty）
+
+### RouteToRequestUrl Filter (路由到请求地址过滤器)
+
+The `RouteToRequestUrlFilter` runs if there is a `Route` object in the `ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR` exchange attribute. It creates a new URI, based off of the request URI, but updated with the URI attribute of the `Route` object. The new URI is placed in the `ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR` exchange attribute`.
+
+> 如果在交换属性中以`ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`为key获得一个`Route`对象，那么路由请求地址过滤器`RouteToRequestUrlFilter`就会生效工作。其创建一个新的URI是基于请求的URI，但是根据`Route`对象的URI属性进行更新。新的URI会以`ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`为key放置到交换属性当中。
+
+### Websocket Routing Filter （Websocket路由过滤器）
+
+The Websocket Routing Filter runs if the url located in the `ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR` exchange attribute has a `ws` or `wss` scheme. It uses the Spring Web Socket infrastructure to forward the Websocket request downstream.
+
+> 如果在交换属性中以`ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR`为key获得的url是以`ws`或者是`wss`为请求协议，那么Netty路由过滤器就会生效工作。其使用Spring Web Socket底层代码处理，来将Websocket请求转发到下游。
+
+## Configuration （配置）
+
+Configuration for Spring Cloud Gateway is driven by a collection of `RouteDefinitionLocator` s.
+
+> Spring Cloud Gateway的配置是被一系列的`RouteDefinitionLocator`类来管理的。
+
+RouteDefinitionLocator.java
+----
+public interface RouteDefinitionLocator {
+	Flux<RouteDefinition> getRouteDefinitions();
+}
+----
+
+By default, a `PropertiesRouteDefinitionLocator` loads properties using Spring Boot's `@ConfigurationProperties` mechanism.
+
+> 默认方式下，`PropertiesRouteDefinitionLocator`是通过使用Spring Boot的 `@ConfigurationProperties` 原理来进行加载配置的。
+
+The configuration examples above all use a shortcut notation that uses positional arguments rather than named ones. The two examples below are equivalent:
+
+> 以上的配置例子全部都是使用一个指定位置参数（译者注：“_genkey_”+i）的快捷方式，而不是指定命名的。下面两个例子是等价的：
+
+.application.yml
+[source,yaml]
+----
+spring:
+  cloud:
+    gateway:
+      routes:
+      # =====================================
+      - id: setstatus_route
+        uri: http://example.org
+        filters:
+        - name: SetStatus
+          args:
+            status: 401
+      - id: setstatusshortcut_route
+        uri: http://example.org
+        filters:
+        - SetStatus=401
+----
+
+For some usages of the gateway, properties will be adequate, but some production use cases will benefit from loading configuration from an external source, such as a database. Future milestone versions will have `RouteDefinitionLocator` implementations based off of Spring Data Repositories such as: Redis, MongoDB and Cassandra.
+
+> 在gateway网关的一些使用方法上，properties配置会是合适的，但是有些生产使用案例中使用从外部来源加载配置将会更好，比如从一个数据库。未来的里程碑版本将会有 `RouteDefinitionLocator`基于Spring Data Repositories来实现，例如：Redis, MongoDB and Cassandra。
+
+### Fluent Java Routes API （流式Java路由API）
+
+To allow for simple configuration in Java, there is a fluent API defined in the `Routes` class.
+
+> 为了在Java中更简单的配置，在`Routes`类中定义了流式API。
+
+GatewaySampleApplication.java
+----
+// static imports from GatewayFilters and RoutePredicates
+@Bean
+public RouteLocator customRouteLocator(ThrottleGatewayFilterFactory throttle) {
+    return Routes.locator()
+            .route("test")
+                .predicate(host("**.abc.org").and(path("/image/png")))
+                .addResponseHeader("X-TestHeader", "foobar")
+                .uri("http://httpbin.org:80")
+            .route("test2")
+                .predicate(path("/image/webp"))
+                .add(addResponseHeader("X-AnotherHeader", "baz"))
+                .uri("http://httpbin.org:80")
+            .route("test3")
+                .order(-1)
+                .predicate(host("**.throttle.org").and(path("/get")))
+                .add(throttle.apply(tuple().of("capacity", 1,
+                    "refillTokens", 1,
+                    "refillPeriod", 10,
+                    "refillUnit", "SECONDS")))
+                .uri("http://httpbin.org:80")
+            .build();
+}
+----
+
+This style also allows for more custom predicate assertions. The predicates defined by `RouteDefinitionLocator` beans are combined using logical `and`. By using the fluent Java API, you can use the `and()`, `or()` and `negate()` operators on the `Predicate` class.
+
+> 这类风格也允许更多的自定义predicates断言。被 `RouteDefinitionLocator` 实例定义的predicates通过使用逻辑 `and` 来组合。通过使用Java流式API，你能使用`and()`, `or()` 和 `negate()`来操作`Predicate`类。
+
+## Actuator API （执行器API）
+
+TODO: document the `/gateway` actuator endpoint
+
+> 接下来要做：`/gateway`执行器端点文档
+
+## Developer Guide （开发者指南）
+
+TODO: overview of writing custom integrations
+
+> 接下来要做：编写自定义集成概述
+
+### Writing Custom Route Predicate Factories （编写自定义路由Predicate工厂）
+
+TODO: document writing Custom Route Predicate Factories
+
+> 接下来要做：文档化编写自定义路由Predicate工厂
+
+### Writing Custom GatewayFilter Factories （编写自定义GatewayFilter工厂）
+
+TODO: document writing Custom GatewayFilter Factories
+
+> 接下来要做：文档化编写自定义GatewayFilter工厂
+
+### Writing Custom Global Filters （编写自定义全局过滤器）
+
+TODO: document writing Custom Global Filters
+
+> 接下来要做：文档化编写自定义全局过滤器
+
+### Writing Custom Route Locators and Writers （编写自定义路由定位器和写入器）
+
+TODO: document writing Custom Route Locators and Writers
+
+> 接下来要做：文档化编写自定义路由定位器和写入器
+
+## Building a Simple Gateway Using Spring MVC （使用Spring MVC构建一个简单的网关）
+
+Spring Cloud Gateway provides a utility object called `ProxyExchange` which you can use inside a regular Spring MVC handler as a method parameter. It supports basic downstream HTTP exchanges via methods that mirror the HTTP verbs, or forwarding to a local handler via the `forward()` method.
+
+> Spring Cloud Gateway 提供了名为 `ProxyExchange` 一个实用化对象，你可以使用它来内置一个正确的Spring MVC处理器作为方法参数。它支持通过真实的HTTP的方法来替换下游的内部HTTP，或者通过 `forward()` 方法转发到一个本地的处理器。
+
+Example (proxying a request to "/test" downstream to a remote server):
+
+> 例如下：（代理请求"/test"的请求到下游的一个远程服务）
+
+```java
+@RestController
+@SpringBootApplication
+public class GatewaySampleApplication {
+
+	@Value("${remote.home}")
+	private URI home;
+
+	@GetMapping("/test")
+	public ResponseEntity<?> proxy(ProxyExchange<Object> proxy) throws Exception {
+		return proxy.uri(home.toString() + "/image/png").get();
+	}
+
+}
+```
+
+There are convenience methods on the `ProxyExchange` to enable the handler method to discover and enhance the URI path of the incoming request. For example you might want to extract the trailing elements of a path to pass them downstream:
+
+> 在`ProxyExchange`有简单的方式去通过处理器方法发现并完善请求的URI路径。比如你可能想提取路径后的元素，以便将它们传递到下游：
+
+
+```java
+@GetMapping("/proxy/path/**")
+public ResponseEntity<?> proxyPath(ProxyExchange<?> proxy) throws Exception {
+  String path = proxy.path("/proxy/path/");
+  return proxy.uri(home.toString() + "/foos/" + path).get();
+}
+```
+
+All the features of Spring MVC are available to Gateway handler methods. So you can inject request headers and query parameters, for instance, and you can constrain the incoming requests with declarations in the mapping annotation. See the documentation for `@RequestMapping` in Spring MVC for more details of those features.
+
+> 所有的Spring MVC的特性都可以使用到网关的处理器方法。因此你可以注入请求头和查询参数，你可以使用映射注解声明来约束请求。 查看Spring MVC中的 `@RequestMapping` 文档可以了解更多的特性。
+
+Headers can be added to the downstream response using the `header()` methods on `ProxyExchange`.
+
+> 通过 `ProxyExchange` 的 `header()` 方法可以添加头信息到下游的响应中。
+
+You can also manipulate response headers (and anything else you like in the response) by adding a mapper to the `get()` etc. method. The mapper is a `Function` that takes the incoming `ResponseEntity` and converts it to an outgoing one.
+
+> 通过向 `get()` 之类的方法添加一个映射，你也可以操作响应头（包括在响应中你想要的）。这个映射是一个需要输入`ResponseEntity` 和转化指定输出的 `Function` 函数。 
+
+First class support is provided for "sensitive" headers ("cookie" and "authorization" by default) which are not passed downstream, and for "proxy" headers (`x-forwarded-*`).
+
+> 最高优先级的类支持处理让 `sensitive` 敏感头信息（`cookie`和`authorization`是默认的）不往下游传递，并且对于 `proxy` 代理头信息处理为（`x-forwarded-*`）。
